@@ -16,6 +16,12 @@
 const value = input.value ?? 'default'
 ```
 
+### Testing
+
+Name tests following the pattern: should [expected behavior] when [condition].
+No logic in tests — no if, no loops.
+Test behavior, not implementation details.
+
 ### Functions
 - Use `const` with arrow functions instead of the `function` keyword.
 - Apply **RORO pattern** (Receive Object, Return Object) when a function has more than 3 parameters — applies to all technologies and layers (components, services, controllers, utils).
@@ -58,6 +64,8 @@ const process = (user: User) => {
 ## React
 
 - Use existing UI components instead of raw HTML tags (`<Button>` vs `<button>`).
+- Do not use useEffect for state derivation — use useMemo or derived instead.
+- Avoid unnecessary re-renders: use memo() and useCallback on handlers passed as props.
 - No business logic in components — extract to hooks or utils.
 - Avoid props drilling beyond 2 levels — use Context, Zustand, or Jotai.
 - Use `nuqs` for query params management instead of manual `useSearchParams` manipulation.
