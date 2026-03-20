@@ -164,3 +164,36 @@ const userRouter = router({
 - No business logic in `.svelte` components — extract to `.svelte.ts` stores or utils.
 - Use `nuqs` or a dedicated store for query params — never manipulate them directly in components.
 - Avoid props drilling beyond 2 levels — use Svelte context (`setContext` / `getContext`) or a shared store.
+
+---
+
+## Workflow & Behavior
+
+### Planning
+- Enter plan mode for architectural decisions or tasks with 5+ steps.
+- If an approach goes sideways, STOP and re-plan — don't keep pushing a broken path.
+- Include verification steps in the plan, not just building steps.
+
+### Subagents
+- Use subagents for parallel independent research or when results would bloat the main context.
+- One focused task per subagent.
+- Keep simple searches (single file/class lookups) in the main thread — don't over-delegate.
+
+### Verification
+- Never mark a task complete without proving it works.
+- Run tests, check logs, demonstrate correctness.
+- Diff behavior between main and changes when relevant.
+
+### Bug Fixing
+- When given a bug report: investigate and fix autonomously. Don't ask for hand-holding.
+- Point at logs, errors, failing tests — then resolve them.
+- Go fix failing CI tests without being told how.
+
+### Self-Correction
+- After any correction from the user: save the lesson to memory so the same mistake doesn't repeat.
+- Write concrete rules that prevent the pattern, not vague reminders.
+
+### Core Principles
+- **Simplicity first**: make every change as simple as possible, impact minimal code.
+- **Find root causes**: no temporary fixes, no band-aids. Senior developer standards.
+- **Pause before complexity**: for non-trivial changes, ask "is there a simpler way?" before implementing.
