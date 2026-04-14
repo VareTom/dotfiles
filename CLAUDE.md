@@ -49,6 +49,9 @@ const process = (user: User) => {
 - No magic numbers — extract named constants.
 - No `console.log` left in code.
 - No commented-out code — delete it, Git keeps the history.
+- Avoid defensive programming for unlikely scenarios unless at a system boundary.
+- Don't create files or scripts unless explicitly requested.
+- Don't add features that weren't requested.
 
 ### Comments & Documentation
 - Avoid useless comments — code should be self-explanatory.
@@ -63,6 +66,7 @@ const process = (user: User) => {
 
 ## React
 
+- Use `export const` for components: `export const MyComponent = () => { ... }`.
 - Use existing UI components instead of raw HTML tags (`<Button>` vs `<button>`).
 - Do not use useEffect for state derivation — use useMemo or derived instead.
 - Avoid unnecessary re-renders: use memo() and useCallback on handlers passed as props.
@@ -107,6 +111,14 @@ const ProductList = () => <AddToCartButton />  // passes down only what's needed
 'use client'
 const AddToCartButton = () => { ... }
 ```
+
+---
+
+## Database
+
+- Use `@map` to keep column names in snake_case.
+- Every table must have `created_at`, `updated_at`, and `deleted_at` columns.
+- Every `DateTime` and `id` column must have an index.
 
 ---
 
