@@ -61,6 +61,23 @@ const process = (user: User) => {
 
 ### Git
 - Conventional commits: `feat:`, `fix:`, `chore:`, `refactor:`, `docs:`, `test:`.
+- Never add `Co-Authored-By`, `Generated with Claude Code`, or any AI attribution in commits, PRs, or code review comments.
+- Never sign commits (`--no-gpg-sign` is fine — no GPG signing is configured).
+
+### Ticket Workflow
+When starting a new ticket:
+1. Checkout from the base branch (`develop` unless specified), pull latest.
+2. Create a branch: `<type>/rush-<number>-<slug>` (e.g. `feat/rush-925-adapt-onboarding-flow-style`).
+3. Update the Linear issue status to "In Progress".
+
+When finishing:
+1. Commit feature by feature with conventional commit messages.
+2. Push and create a PR targeting `develop` (unless specified).
+3. Run the `code-review` plugin on the PR.
+
+During implementation:
+- Type-check after changes (`bunx tsc --noEmit`).
+- Regenerate API client after OpenAPI/backend changes (`bun run generate` in `packages/api-client`).
 
 ---
 
