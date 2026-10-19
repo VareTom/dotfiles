@@ -1,0 +1,177 @@
+name: Database Standards
+
+on:
+  pull_request:
+    paths:
+      - "prisma/**"
+
+jobs:
+  database-standards:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: minus
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+
+      - name: Verify migrations
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/your-database
+        run: |
+          FILES_BEFORE=$(ls ./prisma/migrations 2>/dev/null | wc -l)
+          ls ./prisma/migrations 2>/dev/null > /tmp/migrations_before.txt || touch /tmp/migrations_before.txt
+          bun run db:generate
+          DATABASE_URL=postgresql://postgres:postgres@localhost:5432/your-database bunx prisma migrate dev --name verify
+          FILES_AFTER=$(ls ./prisma/migrations 2>/dev/null | wc -l)
+          if [ $FILES_BEFORE -ne $FILES_AFTER ]; then
+              echo "::error::Missing migration(s) detected"
+              echo ""
+              echo "Number of migrations before: $FILES_BEFORE"
+              echo "Number of migrations after: $FILES_AFTER"
+              echo ""
+              echo "New migration(s) generated:"
+              ls ./prisma/migrations > /tmp/migrations_after.txt
+              diff /tmp/migrations_before.txt /tmp/migrations_after.txt | grep "^>" | sed 's/^> //'
+              echo ""
+              echo "Content of new migration(s):"
+              for migration in $(diff /tmp/migrations_before.txt /tmp/migrations_after.txt | grep "^>" | sed 's/^> //'); do
+                  echo "===== Migration: $migration ====="
+                  if [ -f "./prisma/migrations/$migration/migration.sql" ]; then
+                      cat "./prisma/migrations/$migration/migration.sql"
+                  else
+                      echo "Migration file not found"
+                  fi
+                  echo ""
+              done
+              exit 1
+          fi
+
+      - name: Verify schema
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/your-database
+        run: |
+          set -e
+          error_file=$(mktemp)
+
+          psql postgresql://postgres:postgres@localhost:5432/your-database << 'EOSQL' 2> "$error_file"
+            DO $$
+            DECLARE
+              r RECORD;
+            BEGIN
+              -- Check for missing indexes on foreign keys
+              FOR r IN (
+                SELECT
+                  tc.table_name, kcu.column_name
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu
+                  ON tc.constraint_name = kcu.constraint_name
+                WHERE tc.constraint_type = 'FOREIGN KEY'
+                  AND tc.table_name != '_prisma_migrations'
+                  AND NOT EXISTS (
+                    SELECT 1 FROM pg_indexes pi
+                    WHERE pi.tablename = tc.table_name
+                      AND pi.indexdef LIKE '%' || kcu.column_name || '%'
+                  )
+              ) LOOP
+                RAISE EXCEPTION 'Missing index on foreign key: %.%', r.table_name, r.column_name;
+              END LOOP;
+              -- Check for tables missing timestamp fields
+              FOR r IN (
+                SELECT table_name
+                FROM information_schema.tables
+                WHERE table_schema = 'public'
+                  AND table_name != '_prisma_migrations'
+                  AND (
+                    NOT EXISTS (
+                      SELECT 1
+                      FROM information_schema.columns
+                      WHERE column_name = 'created_at'
+                        AND table_name = tables.table_name
+                    ) OR
+                    NOT EXISTS (
+                      SELECT 1
+                      FROM information_schema.columns
+                      WHERE column_name = 'updated_at'
+                        AND table_name = tables.table_name
+                    )
+                  )
+              ) LOOP
+                RAISE EXCEPTION 'Table % is missing created_at or updated_at', r.table_name;
+              END LOOP;
+              -- Check for non-snake_case table names
+              FOR r IN (
+                SELECT table_name
+                FROM information_schema.tables
+                WHERE table_schema = 'public'
+                  AND table_name != '_prisma_migrations'
+                  AND table_name !~ '^[a-z][a-z0-9_]*$'
+              ) LOOP
+                RAISE EXCEPTION 'Table name % is not in snake_case format', r.table_name;
+              END LOOP;
+              -- Check for non-snake_case column names
+              FOR r IN (
+                SELECT table_name, column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name != '_prisma_migrations'
+                  AND column_name !~ '^[a-z][a-z0-9_]*$'
+              ) LOOP
+                RAISE EXCEPTION 'Column %.% is not in snake_case format', r.table_name, r.column_name;
+              END LOOP;
+              -- Check for date/timestamp fields without indexes (excluding updated_at)
+              FOR r IN (
+                SELECT
+                  c.table_name, c.column_name
+                FROM information_schema.columns c
+                WHERE c.table_schema = 'public'
+                  AND c.table_name != '_prisma_migrations'
+                  AND (
+                    c.data_type LIKE '%timestamp%'
+                    OR c.data_type LIKE '%date%'
+                  )
+                  AND c.column_name != 'updated_at'
+                  AND NOT EXISTS (
+                    SELECT 1 FROM pg_indexes pi
+                    WHERE pi.tablename = c.table_name
+                      AND pi.indexdef LIKE '%' || c.column_name || '%'
+                  )
+              ) LOOP
+                RAISE EXCEPTION 'Date field missing index: %.%', r.table_name, r.column_name;
+              END LOOP;
+              -- Check for 'email' fields without indexes
+              FOR r IN (
+                SELECT
+                  c.table_name, c.column_name
+                FROM information_schema.columns c
+                WHERE c.column_name = 'email'
+                  AND c.table_schema = 'public'
+                  AND c.table_name != '_prisma_migrations'
+                  AND NOT EXISTS (
+                    SELECT 1 FROM pg_indexes pi
+                    WHERE pi.tablename = c.table_name
+                      AND pi.indexdef LIKE '%' || c.column_name || '%'
+                  )
+              ) LOOP
+                RAISE EXCEPTION 'Field named email missing index: %.%', r.table_name, r.column_name;
+              END LOOP;
+            END $$;
+          EOSQL
+
+          if [ -s "$error_file" ]; then
+            echo "::error::Schema verification failed"
+            cat "$error_file"
+            exit 1
+          fi
